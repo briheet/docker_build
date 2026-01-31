@@ -1,0 +1,30 @@
+[project]
+name = "sdxl-turbo-worker"
+version = "0.1.0"
+description = "SDXL-Turbo image generation worker for testing"
+requires-python = ">=3.10"
+dependencies = [
+    "gen-worker",
+    "msgspec",
+    "diffusers>=0.25.0",
+    "transformers>=4.36.0",
+    "accelerate>=0.25.0",
+    "safetensors",
+]
+
+[tool.cozy]
+deployment-id = "sdxl-turbo-test"
+python = "3.11"
+pytorch = "2.5"
+cuda = "12.6"
+
+[tool.cozy.environment]
+HF_HOME = "/app/.cache/huggingface"
+
+[tool.cozy.functions]
+generate = { requires_gpu = true }
+generate_base64 = { requires_gpu = true }
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
