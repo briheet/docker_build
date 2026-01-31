@@ -1,37 +1,37 @@
 """
 SDXL-Turbo Image Generation Worker
 
-Loads the pipeline directly (no ModelRef injection) for simple-mode compatibility.
+TEMPORARY: Dummy responses to isolate framework vs function errors.
+Includes monkey-patch to log exceptions from gen-worker's silent handler.
 """
 
-import base64
 import logging
-import traceback
-from io import BytesIO
+import traceback as _tb
 from typing import Optional
 
 import msgspec
-import torch
-from diffusers import AutoPipelineForText2Image
 from gen_worker import worker_function, ActionContext
 
 logger = logging.getLogger(__name__)
 
-# Global pipeline cache — loaded once on first call
-_pipeline = None
+# --- Monkey-patch gen-worker to log exceptions in _execute_task ---
+# The gen-worker silently swallows all exceptions without logging.
+# This patch makes _map_exception also log the full traceback.
+try:
+    import gen_worker.worker as _gw
 
+    _orig_map_exception = _gw.Worker._map_exception
 
-def _get_pipeline(device: str):
-    global _pipeline
-    if _pipeline is None:
-        logger.info("Loading SDXL-Turbo pipeline for device=%s...", device)
-        _pipeline = AutoPipelineForText2Image.from_pretrained(
-            "stabilityai/sdxl-turbo",
-            torch_dtype=torch.float16 if device != "cpu" else torch.float32,
-            variant="fp16" if device != "cpu" else None,
-        ).to(device)
-        logger.info("Pipeline loaded successfully.")
-    return _pipeline
+    def _patched_map_exception(self, exc):
+        tb_str = "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+        logger.error("TASK EXCEPTION (patched): %s\n%s", exc, tb_str)
+        return _orig_map_exception(self, exc)
+
+    _gw.Worker._map_exception = _patched_map_exception
+    logger.info("Monkey-patched Worker._map_exception for error logging")
+except Exception as patch_err:
+    logger.warning("Failed to monkey-patch Worker._map_exception: %s", patch_err)
+# --- End monkey-patch ---
 
 
 class GenerateInput(msgspec.Struct):
@@ -68,48 +68,19 @@ def generate(
     ctx: ActionContext,
     payload: GenerateInput,
 ) -> GenerateOutput:
-    """Generate an image and save to file store."""
-    try:
-        logger.info("generate called: prompt=%s, device=%s", payload.prompt[:50], ctx.device)
-        pipeline = _get_pipeline(ctx.device)
-
-        generator = None
-        if payload.seed is not None:
-            generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
-
-        image = pipeline(
-            prompt=payload.prompt,
-            num_inference_steps=payload.num_steps,
-            guidance_scale=payload.guidance_scale,
-            width=payload.width,
-            height=payload.height,
-            generator=generator,
-        ).images[0]
-
-        buffer = BytesIO()
-        image.save(buffer, format="PNG")
-        buffer.seek(0)
-
-        image_url = ctx.save_bytes(
-            f"generated/{ctx.run_id}.png",
-            buffer.getvalue(),
-            "image/png",
-        )
-
-        return GenerateOutput(
-            image_url=image_url,
-            prompt=payload.prompt,
-            settings={
-                "num_steps": payload.num_steps,
-                "width": payload.width,
-                "height": payload.height,
-                "seed": payload.seed,
-                "guidance_scale": payload.guidance_scale,
-            },
-        )
-    except Exception as e:
-        logger.error("generate FAILED: %s\n%s", e, traceback.format_exc())
-        raise
+    """Generate an image and save to file store (DUMMY for debugging)."""
+    logger.info("generate called (DUMMY): prompt=%s", payload.prompt[:50])
+    return GenerateOutput(
+        image_url="https://example.com/dummy.png",
+        prompt=payload.prompt,
+        settings={
+            "num_steps": payload.num_steps,
+            "width": payload.width,
+            "height": payload.height,
+            "seed": payload.seed,
+            "guidance_scale": payload.guidance_scale,
+        },
+    )
 
 
 @worker_function()
@@ -117,38 +88,15 @@ def generate_base64(
     ctx: ActionContext,
     payload: GenerateBase64Input,
 ) -> GenerateBase64Output:
-    """Generate an image and return as base64 string."""
-    try:
-        logger.info("generate_base64 called: prompt=%s, device=%s", payload.prompt[:50], ctx.device)
-        pipeline = _get_pipeline(ctx.device)
-
-        generator = None
-        if payload.seed is not None:
-            generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
-
-        image = pipeline(
-            prompt=payload.prompt,
-            num_inference_steps=payload.num_steps,
-            guidance_scale=0.0,
-            width=payload.width,
-            height=payload.height,
-            generator=generator,
-        ).images[0]
-
-        buffer = BytesIO()
-        image.save(buffer, format="PNG")
-        img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        return GenerateBase64Output(
-            image_base64=img_base64,
-            prompt=payload.prompt,
-            settings={
-                "num_steps": payload.num_steps,
-                "width": payload.width,
-                "height": payload.height,
-                "seed": payload.seed,
-            },
-        )
-    except Exception as e:
-        logger.error("generate_base64 FAILED: %s\n%s", e, traceback.format_exc())
-        raise
+    """Generate an image as base64 (DUMMY for debugging)."""
+    logger.info("generate_base64 called (DUMMY): prompt=%s", payload.prompt[:50])
+    return GenerateBase64Output(
+        image_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        prompt=payload.prompt,
+        settings={
+            "num_steps": payload.num_steps,
+            "width": payload.width,
+            "height": payload.height,
+            "seed": payload.seed,
+        },
+    )
