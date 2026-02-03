@@ -1,32 +1,50 @@
 """
 SDXL-Turbo Image Generation Worker
 
-Loads the pipeline directly (no ModelRef injection) for simple-mode compatibility.
+Uses ModelRef injection for automatic model loading, caching, and lifecycle.
+A custom runtime loader handles fp16 dtype and variant settings.
 """
 
 import base64
 from io import BytesIO
-from typing import Optional
+from typing import Annotated, Optional
 
 import msgspec
 import torch
 from diffusers import AutoPipelineForText2Image
-from gen_worker import worker_function, ActionContext
+from gen_worker import ActionContext, worker_function
+from gen_worker.injection import (
+    ModelArtifacts,
+    ModelRef,
+    ModelRefSource as Src,
+    register_runtime_loader,
+)
 
 
-# Global pipeline cache — loaded once on first call
-_pipeline = None
+def _load_sdxl_turbo_pipeline(
+    ctx: ActionContext,
+    artifacts: ModelArtifacts,
+) -> AutoPipelineForText2Image:
+    """Custom loader: ensures fp16 on GPU and correct variant."""
+    model_id = artifacts.model_id
+
+    # Strip the hf: prefix that _canonicalize_model_ref_string adds
+    if model_id.startswith("hf:"):
+        model_id = model_id[3:]
+
+    device = str(ctx.device)
+    is_gpu = device != "cpu"
+
+    pipeline = AutoPipelineForText2Image.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16 if is_gpu else torch.float32,
+        variant="fp16" if is_gpu else None,
+    ).to(device)
+
+    return pipeline
 
 
-def _get_pipeline(device: str):
-    global _pipeline
-    if _pipeline is None:
-        _pipeline = AutoPipelineForText2Image.from_pretrained(
-            "stabilityai/sdxl-turbo",
-            torch_dtype=torch.float16 if device != "cpu" else torch.float32,
-            variant="fp16" if device != "cpu" else None,
-        ).to(device)
-    return _pipeline
+register_runtime_loader(AutoPipelineForText2Image, _load_sdxl_turbo_pipeline)
 
 
 class GenerateInput(msgspec.Struct):
@@ -61,11 +79,13 @@ class GenerateBase64Output(msgspec.Struct):
 @worker_function()
 def generate(
     ctx: ActionContext,
+    pipeline: Annotated[
+        AutoPipelineForText2Image,
+        ModelRef(Src.DEPLOYMENT, "sdxl-turbo"),
+    ],
     payload: GenerateInput,
 ) -> GenerateOutput:
     """Generate an image and save to file store."""
-    pipeline = _get_pipeline(ctx.device)
-
     generator = None
     if payload.seed is not None:
         generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
@@ -105,11 +125,13 @@ def generate(
 @worker_function()
 def generate_base64(
     ctx: ActionContext,
+    pipeline: Annotated[
+        AutoPipelineForText2Image,
+        ModelRef(Src.DEPLOYMENT, "sdxl-turbo"),
+    ],
     payload: GenerateBase64Input,
 ) -> GenerateBase64Output:
     """Generate an image and return as base64 string."""
-    pipeline = _get_pipeline(ctx.device)
-
     generator = None
     if payload.seed is not None:
         generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)

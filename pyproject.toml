@@ -22,6 +22,9 @@ cuda = "12.6"
 [tool.cozy.environment]
 HF_HOME = "/app/.cache/huggingface"
 
+[tool.cozy.models]
+sdxl-turbo = "hf:stabilityai/sdxl-turbo"
+
 [tool.cozy.functions]
 generate = { requires_gpu = true }
 generate_base64 = { requires_gpu = true }

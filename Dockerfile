@@ -12,6 +12,10 @@ COPY . .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
+# Generate manifest (bakes model key->id mapping into the image)
+RUN mkdir -p /app/.cozy && \
+    python -m gen_worker.discover > /app/.cozy/manifest.json
+
 # Set environment variables
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
