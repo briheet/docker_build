@@ -102,14 +102,13 @@ def generate(
     image.save(buffer, format="PNG")
     buffer.seek(0)
 
-    image_url = ctx.save_bytes(
+    asset = ctx.save_bytes(
         f"runs/{ctx.run_id}/outputs/image.png",
         buffer.getvalue(),
-        "image/png",
     )
 
     return GenerateOutput(
-        image_url=image_url,
+        image_url=asset.ref,
         prompt=payload.prompt,
         settings={
             "num_steps": payload.num_steps,
@@ -147,14 +146,13 @@ def generate_base64(
     buffer = BytesIO()
     image.save(buffer, format="PNG")
 
-    image_url = ctx.save_bytes(
+    asset = ctx.save_bytes(
         f"runs/{ctx.run_id}/outputs/image.png",
         buffer.getvalue(),
-        "image/png",
     )
 
     return GenerateBase64Output(
-        image_url=image_url,
+        image_url=asset.ref,
         prompt=payload.prompt,
         settings={
             "num_steps": payload.num_steps,
