@@ -5,7 +5,6 @@ Uses ModelRef injection for automatic model loading, caching, and lifecycle.
 A custom runtime loader handles fp16 dtype and variant settings.
 """
 
-import base64
 from io import BytesIO
 from typing import Annotated, Optional
 
@@ -71,7 +70,7 @@ class GenerateBase64Input(msgspec.Struct):
 
 
 class GenerateBase64Output(msgspec.Struct):
-    image_base64: str
+    image_url: str
     prompt: str
     settings: dict
 
@@ -104,7 +103,7 @@ def generate(
     buffer.seek(0)
 
     image_url = ctx.save_bytes(
-        f"generated/{ctx.run_id}.png",
+        f"runs/{ctx.run_id}/outputs/image.png",
         buffer.getvalue(),
         "image/png",
     )
@@ -131,7 +130,7 @@ def generate_base64(
     ],
     payload: GenerateBase64Input,
 ) -> GenerateBase64Output:
-    """Generate an image and return as base64 string."""
+    """Generate an image and save to file store."""
     generator = None
     if payload.seed is not None:
         generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
@@ -147,10 +146,15 @@ def generate_base64(
 
     buffer = BytesIO()
     image.save(buffer, format="PNG")
-    img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    image_url = ctx.save_bytes(
+        f"runs/{ctx.run_id}/outputs/image.png",
+        buffer.getvalue(),
+        "image/png",
+    )
 
     return GenerateBase64Output(
-        image_base64=img_base64,
+        image_url=image_url,
         prompt=payload.prompt,
         settings={
             "num_steps": payload.num_steps,
