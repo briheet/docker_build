@@ -6,26 +6,26 @@ requires-python = ">=3.10"
 dependencies = [
     "gen-worker",
     "msgspec",
-    "diffusers>=0.25.0,<0.32.0",
-    "transformers>=4.36.0,<4.46.0",
+    "diffusers>=0.25.0",
+    "transformers>=4.36.0",
     "accelerate>=0.25.0",
     "safetensors",
-    "sentencepiece",
 ]
 
 [tool.cozy]
 deployment-id = "sdxl-turbo-test"
-
-[tool.cozy.build]
-gpu = true
+python = "3.11"
+pytorch = "2.5"
 cuda = "12.6"
-torch = "2.9"
+main = "worker"
+gen-worker = ">=0.2.1"
 
 [tool.cozy.environment]
 HF_HOME = "/app/.cache/huggingface"
 
-[tool.cozy.models]
-sdxl-turbo = "hf:stabilityai/sdxl-turbo"
+[tool.cozy.functions]
+generate = { requires_gpu = true }
+generate_base64 = { requires_gpu = true }
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
