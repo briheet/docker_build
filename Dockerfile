@@ -71,15 +71,22 @@ COPY . .
 # Set USER_MODULES so discover finds the worker functions
 ENV USER_MODULES=worker
 
-# Generate function manifest at build time.
-# First verify the worker module can be imported and has functions
-RUN python -c "import worker; print('Worker module imported successfully')" && \
-    python -c "from worker import generate, generate_base64; print('Functions found:', generate, generate_base64)" && \
-    python -c "from worker import generate; print('_is_worker_function:', getattr(generate, '_is_worker_function', 'NOT SET'))"
+# Generate function manifest at build time using inline script to avoid discover import issues
+RUN mkdir -p /app/.cozy && python -c "
+import json
+import worker
+from gen_worker.discover import _extract_function_metadata
 
-# Now run discovery
-RUN mkdir -p /app/.cozy && python -m gen_worker.discover > /app/.cozy/manifest.json && \
-    echo "Manifest contents:" && cat /app/.cozy/manifest.json
+functions = []
+for name in ['generate', 'generate_base64']:
+    func = getattr(worker, name)
+    if getattr(func, '_is_worker_function', False):
+        meta = _extract_function_metadata(func, 'worker')
+        functions.append(meta)
+
+manifest = {'project_name': 'sdxl-turbo-worker', 'functions': functions}
+print(json.dumps(manifest, indent=2))
+" > /app/.cozy/manifest.json && echo "Manifest:" && cat /app/.cozy/manifest.json
 
 # Run as non-root at runtime.
 RUN groupadd --system --gid 10001 cozy \
