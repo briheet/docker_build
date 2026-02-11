@@ -23,4 +23,4 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          tags: briheet01/cozy-build-sdxl-turbo-test-8358f897:latest
+          tags: briheet01/cozy-build-sdxl-turbo-test-8358f897:v2
