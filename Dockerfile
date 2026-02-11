@@ -56,7 +56,8 @@ COPY pyproject.toml uv.lock ./
 # - We exclude torch + gen-worker because those are installed by the builder earlier and
 #   must never be replaced by project requirements.
 RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
-    uv export --locked --no-dev --no-hashes --no-sources --no-emit-project \
+    uv lock && \
+    uv export --no-dev --no-hashes --no-sources --no-emit-project \
       --no-emit-package torch --no-emit-package gen-worker \
       -o /tmp/requirements.all.txt \
     # If the project lock includes torch deps (often via accelerate), never install them here.
