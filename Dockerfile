@@ -75,8 +75,14 @@ RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
 ENV USER_MODULES=worker
 
 # Generate function manifest at build time.
-# Backward-compat: published gen-worker currently exposes ModelRefSource.DEPLOYMENT.
-RUN mkdir -p /app/.cozy && python -c 'from gen_worker.injection import ModelRefSource as M; import runpy; hasattr(M, "RELEASE") or setattr(M, "RELEASE", M.DEPLOYMENT); runpy.run_module("gen_worker.discover", run_name="__main__")' > /app/.cozy/manifest.json
+# First verify the worker module can be imported and has functions
+RUN python -c "import worker; print('Worker module imported successfully')" && \
+    python -c "from worker import generate, generate_base64; print('Functions found:', generate, generate_base64)" && \
+    python -c "from worker import generate; print('_is_worker_function:', getattr(generate, '_is_worker_function', 'NOT SET'))"
+
+# Now run discovery
+RUN mkdir -p /app/.cozy && python -m gen_worker.discover > /app/.cozy/manifest.json && \
+    echo "Manifest contents:" && cat /app/.cozy/manifest.json
 
 # Run as non-root at runtime.
 RUN groupadd --system --gid 10001 cozy \

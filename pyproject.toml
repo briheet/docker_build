@@ -27,6 +27,9 @@ HF_HOME = "/app/.cache/huggingface"
 generate = { requires_gpu = true }
 generate_base64 = { requires_gpu = true }
 
+[tool.setuptools]
+py_modules = ["worker"]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
