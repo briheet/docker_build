@@ -2,7 +2,7 @@
 name = "sdxl-turbo-worker"
 version = "0.1.0"
 description = "SDXL-Turbo image generation worker for testing"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "gen-worker>=0.2.1",
     "msgspec>=0.18.0",
