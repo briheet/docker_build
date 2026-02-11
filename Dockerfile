@@ -65,11 +65,8 @@ RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
     && uv pip install --system --break-system-packages --no-deps -r /tmp/requirements.txt
 
 # Copy application code late so app edits only invalidate the final layers.
+# worker.py is directly importable from /app (no package installation needed)
 COPY . .
-
-# Install the project itself without altering dependency layers.
-RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
-    uv pip install --system --break-system-packages --no-deps --no-sources /app
 
 # Set USER_MODULES so discover finds the worker functions
 ENV USER_MODULES=worker
