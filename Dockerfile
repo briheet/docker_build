@@ -46,9 +46,8 @@ RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
 # Final stage: app-specific deps + code.
 FROM cozy_base
 
-# Copy lock metadata first so dependency layers are cacheable across releases.
-# We install dependencies from the lock, then install the project itself with --no-deps.
-COPY pyproject.toml uv.lock ./
+# Copy pyproject.toml and generate lock file during build
+COPY pyproject.toml ./
 
 # Install Python dependencies into global site-packages (no project venv).
 # Important:
