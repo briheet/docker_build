@@ -71,6 +71,9 @@ COPY . .
 RUN --mount=type=cache,id=cozy-uv-cache,target=/var/cache/uv,sharing=locked \
     uv pip install --system --break-system-packages --no-deps --no-sources /app
 
+# Set USER_MODULES so discover finds the worker functions
+ENV USER_MODULES=worker
+
 # Generate function manifest at build time.
 # Backward-compat: published gen-worker currently exposes ModelRefSource.DEPLOYMENT.
 RUN mkdir -p /app/.cozy && python -c 'from gen_worker.injection import ModelRefSource as M; import runpy; hasattr(M, "RELEASE") or setattr(M, "RELEASE", M.DEPLOYMENT); runpy.run_module("gen_worker.discover", run_name="__main__")' > /app/.cozy/manifest.json
