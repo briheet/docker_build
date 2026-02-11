@@ -56,7 +56,7 @@ def generate(
     payload: GenerateInput,
     pipeline: Annotated[
         AutoPipelineForText2Image,
-        ModelRef(ModelRefSource.DEPLOYMENT, "sdxl-turbo")
+        ModelRef(ModelRefSource.FIXED, "sdxl-turbo")
     ],
 ) -> GenerateOutput:
     """
@@ -119,7 +119,7 @@ def generate_base64(
     payload: GenerateBase64Input,
     pipeline: Annotated[
         AutoPipelineForText2Image,
-        ModelRef(ModelRefSource.DEPLOYMENT, "sdxl-turbo")
+        ModelRef(ModelRefSource.FIXED, "sdxl-turbo")
     ],
 ) -> GenerateBase64Output:
     """
