@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build package
+    cmds:
+      - rm -rf dist/
+      - uv build
+
+  lint:
+    desc: Type checking
+    cmds:
+      - uv run mypy src/gen_worker
+
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest tests/
