@@ -1,10 +1,17 @@
 schema_version = 1
+
 name = "sdxl-turbo-worker"
-main = "worker"
+main = "sdxl_turbo_worker.main"
 gen_worker = ">=0.2.1"
 
+[host.requirements]
+cuda = "12.6"
+
 [models]
-sdxl-turbo = "stabilityai/sdxl-turbo"
+sdxl_turbo = "hf:stabilityai/sdxl-turbo"
 
 [resources]
 vram_gb = 16
+ram_gb = 16
+cpu_cores = 4
+disk_gb = 30

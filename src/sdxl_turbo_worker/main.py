@@ -2,23 +2,31 @@
 SDXL-Turbo Image Generation Worker
 
 Demonstrates proper gen-worker SDK usage with model injection.
-
-Works on:
-- NVIDIA GPU (CUDA) - for RunPod deployment
-- CPU - fallback (slow but works)
 """
 
+from __future__ import annotations
+
+import base64
+import logging
 from io import BytesIO
 from typing import Annotated, Optional
 
 import msgspec
-import torch
 from diffusers import AutoPipelineForText2Image
-from gen_worker import worker_function, ActionContext, ModelRef, ModelRefSource
+
+from gen_worker import ActionContext, ResourceRequirements, worker_function
+from gen_worker.injection import ModelRef, ModelRefSource as Src
+from gen_worker.types import Asset
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 class GenerateInput(msgspec.Struct):
     """Input for the generate function."""
+
     prompt: str
     num_steps: int = 4
     width: int = 512
@@ -29,13 +37,15 @@ class GenerateInput(msgspec.Struct):
 
 class GenerateOutput(msgspec.Struct):
     """Output from the generate function."""
-    image_url: str
+
+    image: Asset
     prompt: str
     settings: dict
 
 
 class GenerateBase64Input(msgspec.Struct):
     """Input for the generate_base64 function."""
+
     prompt: str
     num_steps: int = 4
     width: int = 512
@@ -45,19 +55,19 @@ class GenerateBase64Input(msgspec.Struct):
 
 class GenerateBase64Output(msgspec.Struct):
     """Output from the generate_base64 function."""
+
     image_base64: str
     prompt: str
     settings: dict
 
 
-@worker_function()
+@worker_function(ResourceRequirements())
 def generate(
     ctx: ActionContext,
-    payload: GenerateInput,
     pipeline: Annotated[
-        AutoPipelineForText2Image,
-        ModelRef(ModelRefSource.FIXED, "sdxl-turbo")
+        AutoPipelineForText2Image, ModelRef(Src.DEPLOYMENT, "sdxl_turbo")
     ],
+    payload: GenerateInput,
 ) -> GenerateOutput:
     """
     Generate an image from a text prompt and save to file store.
@@ -67,16 +77,29 @@ def generate(
 
     Args:
         ctx: Action context provided by the worker runtime
-        payload: Input payload containing prompt and generation parameters
         pipeline: SDXL-Turbo pipeline, injected by the worker runtime
+        payload: Input payload containing prompt and generation parameters
 
     Returns:
-        GenerateOutput containing the URL to the saved image
+        GenerateOutput containing the Asset reference to the saved image
     """
+    if ctx.is_canceled():
+        raise InterruptedError("Task cancelled")
+
+    logger.info(
+        "[run_id=%s] sdxl-turbo prompt=%r steps=%s",
+        ctx.run_id,
+        payload.prompt,
+        payload.num_steps,
+    )
+
     # Set seed for reproducibility
     generator = None
     if payload.seed is not None:
-        generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        generator = torch.Generator(device=device).manual_seed(payload.seed)
 
     # Generate image using injected pipeline
     image = pipeline(
@@ -91,17 +114,15 @@ def generate(
     # Save image to file store using ctx
     buffer = BytesIO()
     image.save(buffer, format="PNG")
-    buffer.seek(0)
 
-    # Use ctx to save bytes and get URL
-    image_url = ctx.save_bytes(
-        f"generated/{ctx.run_id}.png",
+    # ctx.save_bytes returns an Asset object
+    asset = ctx.save_bytes(
+        f"runs/{ctx.run_id}/outputs/image.png",
         buffer.getvalue(),
-        "image/png",
     )
 
     return GenerateOutput(
-        image_url=image_url,
+        image=asset,
         prompt=payload.prompt,
         settings={
             "num_steps": payload.num_steps,
@@ -113,14 +134,13 @@ def generate(
     )
 
 
-@worker_function()
+@worker_function(ResourceRequirements())
 def generate_base64(
     ctx: ActionContext,
-    payload: GenerateBase64Input,
     pipeline: Annotated[
-        AutoPipelineForText2Image,
-        ModelRef(ModelRefSource.FIXED, "sdxl-turbo")
+        AutoPipelineForText2Image, ModelRef(Src.DEPLOYMENT, "sdxl_turbo")
     ],
+    payload: GenerateBase64Input,
 ) -> GenerateBase64Output:
     """
     Generate an image and return as base64 string.
@@ -129,24 +149,35 @@ def generate_base64(
 
     Args:
         ctx: Action context provided by the worker runtime
-        payload: Input payload containing prompt and generation parameters
         pipeline: SDXL-Turbo pipeline, injected by the worker runtime
+        payload: Input payload containing prompt and generation parameters
 
     Returns:
         GenerateBase64Output containing the base64-encoded image
     """
-    import base64
+    if ctx.is_canceled():
+        raise InterruptedError("Task cancelled")
+
+    logger.info(
+        "[run_id=%s] sdxl-turbo (base64) prompt=%r steps=%s",
+        ctx.run_id,
+        payload.prompt,
+        payload.num_steps,
+    )
 
     # Set seed for reproducibility
     generator = None
     if payload.seed is not None:
-        generator = torch.Generator(device=ctx.device).manual_seed(payload.seed)
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        generator = torch.Generator(device=device).manual_seed(payload.seed)
 
     # Generate image using injected pipeline
     image = pipeline(
         prompt=payload.prompt,
         num_inference_steps=payload.num_steps,
-        guidance_scale=0.0,
+        guidance_scale=0.0,  # SDXL-Turbo optimal setting
         width=payload.width,
         height=payload.height,
         generator=generator,
